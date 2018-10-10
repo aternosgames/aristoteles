@@ -7,9 +7,13 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "Kurt Thiemann",
-  "license": "ISC",
+  "license": "MIT",
   "dependencies": {
     "async": "^2.6.1",
     "discord.js": "^11.4.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aternosgames/aristoteles.git"
   }
 }
