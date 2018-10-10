@@ -60,10 +60,12 @@ function handleMessage(msg){
 const cmd = {
     help: function(msg){
         msg.channel.send([
-            'Usage: .vote start [question] --options [options] --time [time] --notify',
-            '    --options, --time and --notify are optional',
+            'Usage: `.vote start [question] --options [options] --duration [time] --notify`',
+            '`--options` - Answer options seperated by spaces, default \'Yes\' and \'No\'',
+            '`--duration` - Duration in minutes, default 5',
+            '`--notify` - Send notification when voting is over',
             '',
-            'Example: `.vote start "What is the answer to the ultimate question of life, the universe and everything?" --options "42" "something else" --time 5 --notify`'
+            'Example: `.vote start "What is the answer to the ultimate question of life, the universe and everything?" --options "42" "something else" --duration 5 --notify`'
         ]);
     },
     start: function(msg,args){
@@ -82,8 +84,11 @@ const cmd = {
                 options.push(helper.unwrap(args[optionsIndex + i]));
                 i += 1;
             }
+            if(options.length === 0){
+                options = false;
+            }
         }
-        let timeIndex = args.indexOf('--time');
+        let timeIndex = args.indexOf('--duration');
         let time = 5;
         if(timeIndex !== -1 && args[timeIndex + 1] && !isNaN(helper.unwrap(args[timeIndex + 1]))){
             time = Math.min(240,Math.max(1,parseFloat(helper.unwrap(args[timeIndex + 1]))));
@@ -103,7 +108,7 @@ function startVote(text,optionsArray,msg,time = 5,VoteManager = BasicVoteManager
     buildMsg(embed,text,options,null,0,endTime,false);
     msg.channel.send(embed)
         .then(function(message){
-            msg.remove()
+            msg.delete()
                 .catch(out.err);
             let voteMgr = new VoteManager(message,options);
 
