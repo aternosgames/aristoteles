@@ -5,11 +5,18 @@ const out = require('./lib/out');
 const AdvancedVoteManager = require('./lib/AdvancedVoteManager');
 const BasicVoteManager = require('./lib/BasicVoteManager');
 
-
+const emojiLetters = [];
+for(let i = 127462; i <= 127487; i++){
+    emojiLetters.push(String.fromCodePoint(i));
+}
 
 let client;
 connect();
 
+/**
+ * connect/reconnect to Discord
+ *
+ */
 function connect(){
     if(client){
         client.destroy();
@@ -34,6 +41,11 @@ function connect(){
     });
 }
 
+/**
+ * Handle an incoming Discord message
+ *
+ * @param msg
+ */
 function handleMessage(msg){
     let args = helper.split(msg.content,' ');
     if(args[0] !== '.vote' && args[0] !== '.aristoteles'){
@@ -58,19 +70,32 @@ function handleMessage(msg){
 
 
 const cmd = {
+    /**
+     * Send usage/help
+     *
+     * @param msg
+     */
     help: function(msg){
         msg.channel.send([
-            'Usage: `.vote start [question] --options [options] --duration [time] --notify`',
+            'Usage: `.vote start [question] --options [options] --duration [time] --notify [--advanced]`',
             '`--options` - Answer options seperated by spaces, default \'Yes\' and \'No\'',
             '`--duration` - Duration in minutes, default 5',
             '`--notify` - Send notification when voting is over',
+            '`--advanced` - Reactions are not removed immediately and voters can change or withdraw their votes, ' +
+            'looks a bit better but is not recommended for greater amounts of potential voters',
             '',
             'Example: `.vote start "What is the answer to the ultimate question of life, the universe and everything?" --options "42" "something else" --duration 5 --notify`'
         ]);
     },
+    /**
+     * Parse a '.vote start' Discord command and start a vote
+     *
+     * @param msg
+     * @param args
+     * @returns {*|void}
+     */
     start: function(msg,args){
         let question = helper.unwrap(args[2]);
-        let VoteManager = BasicVoteManager;
         if(!question){
             return cmd.help(msg);
         }
@@ -93,30 +118,38 @@ const cmd = {
         if(timeIndex !== -1 && args[timeIndex + 1] && !isNaN(helper.unwrap(args[timeIndex + 1]))){
             time = Math.min(240,Math.max(1,parseFloat(helper.unwrap(args[timeIndex + 1]))));
         }
-        if(args.indexOf('--advanced') !== -1){
-            VoteManager = AdvancedVoteManager;
-        }
-        startVote(question,options,msg,time * 60 * 1000,VoteManager,args.indexOf('--notify') !== -1);
+        startVote(question,options,msg,time * 60 * 1000,args.includes('--advanced'),args.includes('--notify'));
     }
 };
 
-function startVote(text,optionsArray,msg,time = 5,VoteManager = BasicVoteManager,notify = false){
+/**
+ * Start a vote with the specified options
+ *
+ * @param text
+ * @param optionsArray
+ * @param msg
+ * @param time
+ * @param advanced
+ * @param notify
+ */
+function startVote(text,optionsArray,msg,time = 5,advanced = false,notify = false){
+    let VoteManager = (advanced ? AdvancedVoteManager : BasicVoteManager);
     let options = buildOptions(optionsArray);
     let endTime = Date.now() + time;
     let embed = new Discord.RichEmbed();
     embed.setAuthor(msg.author.username,msg.author.displayAvatarURL);
-    buildMsg(embed,text,options,null,0,endTime,false);
+    buildMsg(embed,text,options,null,endTime,advanced);
     msg.channel.send(embed)
         .then(function(message){
             msg.delete()
                 .catch(out.err);
             let voteMgr = new VoteManager(message,options);
 
-            let lastStatusMsg = buildMsg(embed,text,options,voteMgr.getCurrent(),voteMgr.getTotalVotes(),endTime,false).description;
+            let lastStatusMsg = buildMsg(embed,text,options,voteMgr,endTime,advanced).description;
             message.edit(embed)
                 .catch(out.err);
             let msgUpdateInterval = setInterval(function(){
-                let statusMsg = buildMsg(embed,text,options,voteMgr.getCurrent(),voteMgr.getTotalVotes(),endTime,false).description;
+                let statusMsg = buildMsg(embed,text,options,voteMgr,endTime,advanced).description;
                 if(statusMsg !== lastStatusMsg){
                     out.dbg('update');
                     message.edit(embed)
@@ -140,7 +173,7 @@ function startVote(text,optionsArray,msg,time = 5,VoteManager = BasicVoteManager
             collector.on('end', function(collection){
                 voteMgr.end(collection);
                 clearInterval(msgUpdateInterval);
-                message.edit(buildMsg(embed,text,options,voteMgr.getCurrent(),voteMgr.getTotalVotes(),endTime,true))
+                message.edit(buildMsg(embed,text,options,voteMgr,endTime,advanced))
                     .catch(out.err);
                 if(notify){
                     message.channel.send(buildNotification(voteMgr.getCurrent()))
@@ -151,30 +184,51 @@ function startVote(text,optionsArray,msg,time = 5,VoteManager = BasicVoteManager
         .catch(out.err);
 }
 
+/**
+ * Assign emoji to answer options
+ *
+ * @param options
+ */
 function buildOptions(options){
+    let newOptions = {};
     if(!options){
-        return {
-            '🇾': 'Yes',
-            '🇳': 'No'
-        };
+        newOptions[emojiLetters[24]] = 'Yes';
+        newOptions[emojiLetters[13]] = 'No';
+        return newOptions;
     }
 
-    let letters = ['🇦','🇧','🇨','🇩','🇪','🇫','🇬','🇭',
-        '🇮','🇯','🇰','🇱','🇲','🇳','🇴','🇵','🇶','🇷','🇸','🇹','🇺','🇻','🇼','🇽','🇾','🇿'];
-    let newOptions = {};
     for(let i = 0; i < options.length; i++){
-        if(!letters[i]){
+        if(!emojiLetters[i]){
             break;
         }
-        newOptions[letters[i]] = options[i];
+        newOptions[emojiLetters[i]] = options[i];
     }
     return newOptions;
 }
 
-function buildMsg(richEmbed, question, options, userVotes, totalVotes, endTime, ended){
-    richEmbed.setTitle(question);
+/**
+ * Create/update the Discord message representing vote
+ *
+ * @param richEmbed
+ * @param question
+ * @param options
+ * @param voteMgr
+ * @param endTime
+ * @param advanced
+ * @returns {*}
+ */
+function buildMsg(richEmbed, question, options, voteMgr, endTime, advanced = false){
+    let userVotes = 0,
+        totalVotes = 0,
+        ended = false;
+    if(voteMgr){
+        userVotes = voteMgr.getCurrent();
+        totalVotes = voteMgr.getTotalVotes();
+        ended = voteMgr.ended;
+    }
 
-    richEmbed.setColor(ended ? 0xcccccc : 0x1FD78D);
+    richEmbed.setTitle(question);
+    richEmbed.setColor(ended ? 0xCCCCCC : 0x1FD78D);
 
     let description = [];
     let defaultUserVotes = [];
@@ -208,7 +262,8 @@ function buildMsg(richEmbed, question, options, userVotes, totalVotes, endTime, 
 
     description.push('');
     if(ended){
-        description.push('**Final winner' + (winner.length !== 1 ? 's' : '') + ':** ' + winnerString);
+        description.push('**Final winner' + (winner.length !== 1 && winner.length !== userVotes.length ? 's' : '') +
+            ':** ' + winnerString);
     }else{
         description.push('Ending in ' + Math.ceil((endTime - Date.now()) / 1000 / 60) + ' min, currently leading: ' + winnerString);
     }
@@ -216,12 +271,18 @@ function buildMsg(richEmbed, question, options, userVotes, totalVotes, endTime, 
     description.push(diagram.join('\n\n'));
     if(!ended){
         description.push('');
-        description.push('*Use the reactions to vote, you can only vote once and you cannot change your vote.*');
+        description.push('*Use the reactions to vote' + (advanced ? '.*': ', you can only vote once and you cannot change your vote.*'));
     }
     richEmbed.setDescription(description.join('\n'));
     return richEmbed;
 }
 
+/**
+ * Create the notification message sent when a voting is over
+ *
+ * @param userVotes
+ * @returns {string}
+ */
 function buildNotification(userVotes){
     let winner = [];
     let max = 0;
@@ -235,5 +296,6 @@ function buildNotification(userVotes){
         }
     }
     let winnerString = winner.length === userVotes.length ? '`A draw`' : winner.join(', ');
-    return 'Voting is over. Final winner' + (winner.length !== 1 ? 's' : '') + ': ' + winnerString;
+    return 'Voting is over. Final winner' + (winner.length !== 1 && winner.length !== userVotes.length ? 's' : '') +
+        ': ' + winnerString;
 }
