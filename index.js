@@ -255,7 +255,7 @@ function buildMsg(richEmbed, question, options, voteMgr, endTime, advanced = fal
             max = votes;
         }
         diagram.push(userVotes[i].emoji + ' ' +
-            ('||||||||||||||||||||||||||||||||||||||||||||||||||').substr(0,Math.round(votes/totalVotes*50)) +
+            ('[][][][][][][][][][][][][][][][][][][][][][][][][]').substr(0,Math.round(votes/totalVotes*50)) +
             '   **' + votes + '**');
     }
     let winnerString = winner.length === userVotes.length ? '`A draw`' : winner.join(', ');
