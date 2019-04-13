@@ -77,7 +77,7 @@ const cmd = {
      */
     help: function(msg){
         msg.channel.send([
-            'Usage: `.vote start [question] --options [options] --duration [time] --notify [--advanced]`',
+            'Usage: `.vote start <question> --options <options> --duration <time> [--notify] [--advanced]`',
             '`--options` - Answer options seperated by spaces, default \'Yes\' and \'No\'',
             '`--duration` - Duration in minutes, default 5',
             '`--notify` - Send notification when voting is over',

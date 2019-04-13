@@ -3,7 +3,7 @@ Simple Discord vote bot written in NodeJS
 
 
 ## Usage
-`.vote start <question> --options <options> --duration <time> --notify [--advanced]`  
+`.vote start <question> --options <options> --duration <time> [--notify] [--advanced]`  
 
 `--options` - Answer options separated by spaces, default 'Yes' and 'No'  
 `--duration` - Duration in minutes, default 5  
